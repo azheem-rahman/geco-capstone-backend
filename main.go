@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
+	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -61,7 +64,7 @@ func main() {
 	router := gin.Default()
 
 	// Routes related to user account login and creation
-	// router.POST("/login", login)
+	router.POST("/login", login)
 	router.GET("/accounts", getAccounts)
 	router.POST("/new-account", postAccount)
 	// router.PATCH("/update-account-password", updateAccountPassword)
@@ -77,13 +80,56 @@ func main() {
 	router.Run("localhost:8080")
 }
 
-// func login(c *gin.Context) {
+func login(c *gin.Context) {
+	// Get email and password from request body
+	var reqBody emailPassword
+	var accountFoundInDB user
+	// var emailFound bool
+	// var passwordMatched bool
 
-// }
+	// Returns Error HTTP Bad Request 400 if unable to read from request body
+	if c.BindJSON(&reqBody) != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to read request body"})
+		return
+	}
 
-// func loginDB(loginAccount user) (user, error) {
+	// Look up email of login account in database
+	if err := db.QueryRow("SELECT * FROM accounts WHERE email=?", reqBody.Email).Scan(&accountFoundInDB.Account_id, &accountFoundInDB.Email, &accountFoundInDB.Password, &accountFoundInDB.Account_Type); err != nil {
+		// if response returns a no row means email does not exist in database => account does not exist
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"Error": "Invalid email or password"})
+			return
+		}
+	}
 
-// }
+	// Compare password of login account with hashed password of account in database
+	err := bcrypt.CompareHashAndPassword([]byte(accountFoundInDB.Password), []byte(reqBody.Password))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"Error": "Invalid email or password"})
+		return
+	}
+
+	// Generate JWT token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": accountFoundInDB.Email,
+		// expiration of token will be 1 day (24hours)
+		"exp": time.Now().Add(time.Hour * 24).Unix(),
+	})
+
+	// Sign and get complete encoded JWT token as a string using secret key stored in .env file
+	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET")))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to create token"})
+		return
+	}
+
+	// Set JWT token as cookie; cookie expires in 1 day (3600*24seconds)
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("Authorisation", tokenString, 3600*24, "", "", false, true)
+
+	// Return HTTP OK 200
+	c.JSON(http.StatusOK, gin.H{})
+}
 
 func getAccounts(c *gin.Context) {
 	accounts, err := getAccountsFromDB()
