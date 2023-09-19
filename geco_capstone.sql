@@ -23,6 +23,7 @@ CREATE TABLE accounts_details (
 
 CREATE TABLE orders (
     order_id INT NOT NULL AUTO_INCREMENT,
+    account_id INT,
     order_length INT NOT NULL,
     order_width INT NOT NULL,
     order_height INT NOT NULL,
@@ -46,7 +47,10 @@ CREATE TABLE orders (
     pickup_province text NOT NULL,
     due_date TIMESTAMP NOT NULL,
     completed INT NOT NULL,
-    PRIMARY KEY (order_id)
+    PRIMARY KEY (order_id),
+    CONSTRAINT fk_account
+        FOREIGN KEY (account_id)
+        REFERENCES accounts(account_id)
 );
 
 CREATE TABLE order_items (
@@ -58,7 +62,7 @@ CREATE TABLE order_items (
     item_sku varchar(255) NOT NULL,
     item_quantity INT NOT NULL,
     item_price_value decimal(10,2) NOT NULL,
-    item_price_currency varchar(5) NOT NULL
+    item_price_currency varchar(5) NOT NULL,
     PRIMARY KEY (item_id),
     CONSTRAINT fk_order_item
         FOREIGN KEY (order_id)
