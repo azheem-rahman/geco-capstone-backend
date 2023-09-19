@@ -46,33 +46,33 @@ type email struct {
 	Email string `json:"email"`
 }
 
-// type order struct {
-// 	OrderId             int    `json:"order_id"`
-// 	AccountId           int    `json:"account_id"`
-// 	OrderLength         int    `json:"order_length"`
-// 	OrderWidth          int    `json:"order_width"`
-// 	OrderHeight         int    `json:"order_height"`
-// 	OrderWeight         int    `json:"order_weight"`
-// 	ConsigneeName       string `json:"consignee_name"`
-// 	ConsigneeNumber     string `json:"consignee_number"`
-// 	ConsigneeCountry    string `json:"consignee_country"`
-// 	ConsigneeAddress    string `json:"consignee_address"`
-// 	ConsigneePostal     string `json:"consignee_postal"`
-// 	ConsigneeState      string `json:"consignee_state"`
-// 	ConsigneeCity       string `json:"consignee_city"`
-// 	ConsigneeProvince   string `json:"consignee_province"`
-// 	ConsigneeEmail      string `json:"consignee_email"`
-// 	PickupContactName   string `json:"pickup_contact_name"`
-// 	PickupContactNumber string `json:"pickup_contact_number"`
-// 	PickupCountry       string `json:"pickup_country"`
-// 	PickupAddress       string `json:"pickup_address"`
-// 	PickupPostal        string `json:"pickup_postal"`
-// 	PickupState         string `json:"pickup_state"`
-// 	PickupCity          string `json:"pickup_city"`
-// 	PickupProvince      string `json:"pickup_province"`
-// 	DueDate             string `json:"due_date"`
-// 	Completed           int    `json:"completed"`
-// }
+type order struct {
+	OrderId             int    `json:"order_id"`
+	AccountId           int    `json:"account_id"`
+	OrderLength         int    `json:"order_length"`
+	OrderWidth          int    `json:"order_width"`
+	OrderHeight         int    `json:"order_height"`
+	OrderWeight         int    `json:"order_weight"`
+	ConsigneeName       string `json:"consignee_name"`
+	ConsigneeNumber     string `json:"consignee_number"`
+	ConsigneeCountry    string `json:"consignee_country"`
+	ConsigneeAddress    string `json:"consignee_address"`
+	ConsigneePostal     string `json:"consignee_postal"`
+	ConsigneeState      string `json:"consignee_state"`
+	ConsigneeCity       string `json:"consignee_city"`
+	ConsigneeProvince   string `json:"consignee_province"`
+	ConsigneeEmail      string `json:"consignee_email"`
+	PickupContactName   string `json:"pickup_contact_name"`
+	PickupContactNumber string `json:"pickup_contact_number"`
+	PickupCountry       string `json:"pickup_country"`
+	PickupAddress       string `json:"pickup_address"`
+	PickupPostal        string `json:"pickup_postal"`
+	PickupState         string `json:"pickup_state"`
+	PickupCity          string `json:"pickup_city"`
+	PickupProvince      string `json:"pickup_province"`
+	DueDate             string `json:"due_date"`
+	Completed           int    `json:"completed"`
+}
 
 type orderWithoutId struct {
 	AccountId           int    `json:"account_id"`
@@ -140,7 +140,7 @@ func main() {
 	router.GET("/account-details", getAccountDetails)
 
 	// Routes related to orders
-	// router.GET("/orders", getOrders)
+	router.GET("/orders", getOrders)
 	router.POST("/new-order", postOrder)
 
 	router.Run("localhost:8080")
@@ -428,4 +428,54 @@ func postOrder(c *gin.Context) {
 
 	// Respond
 	c.IndentedJSON(http.StatusOK, newOrder)
+}
+
+func getOrders(c *gin.Context) {
+	var orders []order
+
+	// Get rows of orders from DB
+	rows, err := db.Query("SELECT * FROM orders")
+	// if err from getting rows of orders from DB, return HTTP Bad Request 400
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to retrieve orders from DB"})
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var currentOrder order
+		// scan each row of order and save to currentOrder
+		if err := rows.Scan(
+			&currentOrder.OrderId,
+			&currentOrder.AccountId,
+			&currentOrder.OrderLength,
+			&currentOrder.OrderWidth,
+			&currentOrder.OrderHeight,
+			&currentOrder.OrderWeight,
+			&currentOrder.ConsigneeName,
+			&currentOrder.ConsigneeNumber,
+			&currentOrder.ConsigneeCountry,
+			&currentOrder.ConsigneeAddress,
+			&currentOrder.ConsigneePostal,
+			&currentOrder.ConsigneeState,
+			&currentOrder.ConsigneeCity,
+			&currentOrder.ConsigneeProvince,
+			&currentOrder.ConsigneeEmail,
+			&currentOrder.PickupContactName,
+			&currentOrder.PickupContactNumber,
+			&currentOrder.PickupCountry,
+			&currentOrder.PickupAddress,
+			&currentOrder.PickupPostal,
+			&currentOrder.PickupState,
+			&currentOrder.PickupCity,
+			&currentOrder.PickupProvince,
+			&currentOrder.DueDate,
+			&currentOrder.Completed); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to save orders from DB"})
+			return
+		}
+		// add currentOrder to orders slice
+		orders = append(orders, currentOrder)
+	}
+
+	c.JSON(http.StatusOK, orders)
 }
