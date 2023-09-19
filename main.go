@@ -29,12 +29,18 @@ type emailPassword struct {
 	Account_Type string `json:"account_type"`
 }
 
-// type usersDetails struct {
-// 	Detail_id  int    `json:"detail_id"`
-// 	Account_id int    `json:"account_id"`
-// 	First_name string `json:"first_name"`
-// 	Last_name  string `json:"last_name"`
-// }
+type userDetails struct {
+	Detail_id  int    `json:"detail_id"`
+	Account_id int    `json:"account_id"`
+	First_name string `json:"first_name"`
+	Last_name  string `json:"last_name"`
+}
+
+type userFirstLastNameEmail struct {
+	Email      string `json:"email"`
+	First_name string `json:"first_name"`
+	Last_name  string `json:"last_name"`
+}
 
 func setupDBConnection() {
 	cfg := mysql.Config{
@@ -72,7 +78,7 @@ func main() {
 	// router.DELETE("/delete-account", deleteAccount) only Admin
 	// router.PATCH("/update-account-details", updateAccountDetails)
 	// router.GET("/accounts-details", getAccountsDetails)
-	// router.POST("/new-account-details", postAccountDetails)
+	router.POST("/new-account-details", postAccountDetails)
 
 	// Routes related to orders
 	// router.GET("/orders", getOrders)
@@ -244,10 +250,45 @@ func postAccount(c *gin.Context) {
 	_, err = db.Exec("INSERT INTO accounts (email, password, account_type) VALUES (?, ?, ?)", newAccount.Email, newAccount.Password, newAccount.Account_Type)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to create user"})
-
 		return
 	}
 
 	// Respond
-	c.IndentedJSON(http.StatusOK, gin.H{"Success": "Successfully created user"})
+	c.IndentedJSON(http.StatusOK, gin.H{"newAccountEmailCreated": newAccount.Email})
+}
+
+func postAccountDetails(c *gin.Context) {
+	// Get account details for new account from request body
+	var reqBody userFirstLastNameEmail
+	var accountID int
+
+	// Return Error HTTP Bad Request 400 if unable to read from request body
+	if c.BindJSON(&reqBody) != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to read request body"})
+	}
+
+	// Find and Save Account ID from database using Account Email provided in request body
+	if err := db.QueryRow("SELECT account_id FROM accounts WHERE email=?", reqBody.Email).Scan(&accountID); err != nil {
+		// if response returns no rows means no account found in database
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"Error": "No Account Found"})
+			return
+		}
+	}
+
+	// Create new account detail for new account
+	var newAccountDetail userDetails
+	newAccountDetail.Account_id = accountID
+	newAccountDetail.First_name = reqBody.First_name
+	newAccountDetail.Last_name = reqBody.Last_name
+
+	// Save new account detail to DB
+	_, err := db.Exec("INSERT INTO accounts_details (account_id, first_name, last_name) VALUES (?, ?, ?)", newAccountDetail.Account_id, newAccountDetail.First_name, newAccountDetail.Last_name)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to create account details"})
+		return
+	}
+
+	// Respond
+	c.IndentedJSON(http.StatusOK, gin.H{"newAccountDetailCreated": reqBody.Email})
 }
