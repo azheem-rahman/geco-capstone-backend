@@ -184,35 +184,28 @@ func auth(c *gin.Context) {
 }
 
 func getAccounts(c *gin.Context) {
-	accounts, err := getAccountsFromDB()
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	c.IndentedJSON(http.StatusOK, accounts)
-}
-
-func getAccountsFromDB() ([]user, error) {
 	var accounts []user
 
+	// Get rows of accounts from DB
 	rows, err := db.Query("SELECT * FROM accounts")
+	// if err from getting rows of accounts from DB, return HTTP Bad Request 400
 	if err != nil {
-		return nil, fmt.Errorf("getAccountsFromDB %v", err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to retrieve accounts from DB"})
+		return
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var account user
+		// scan each row of accounts and save to account
 		if err := rows.Scan(&account.Account_id, &account.Email, &account.Password, &account.Account_Type); err != nil {
-			return nil, fmt.Errorf("getAccountsFromDB %v", err.Error())
+			c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to save accounts from DB"})
+			return
 		}
+		// add account to accounts slice
 		accounts = append(accounts, account)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("getAccountsFromDB %v", err.Error())
-	}
-
-	return accounts, nil
+	c.JSON(http.StatusOK, accounts)
 }
 
 func postAccount(c *gin.Context) {
