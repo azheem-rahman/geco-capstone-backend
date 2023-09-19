@@ -67,6 +67,7 @@ func main() {
 	router.POST("/login", login)
 	router.GET("/accounts", getAccounts)
 	router.POST("/new-account", postAccount)
+	router.GET("/is-logged-in", auth, accountIsLoggedIn)
 	// router.PATCH("/update-account-password", updateAccountPassword)
 	// router.DELETE("/delete-account", deleteAccount) only Admin
 	// router.PATCH("/update-account-details", updateAccountDetails)
@@ -129,6 +130,57 @@ func login(c *gin.Context) {
 
 	// Return HTTP OK 200
 	c.JSON(http.StatusOK, gin.H{})
+}
+
+func accountIsLoggedIn(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"Message": "User account already logged in",
+	})
+}
+
+func auth(c *gin.Context) {
+	// Get cookie from request body
+	tokenString, err := c.Cookie("Authorisation")
+	if err != nil {
+		c.AbortWithStatus(http.StatusUnauthorized)
+	}
+
+	// Decode and validate cookie
+	token, _ := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		return []byte(os.Getenv("SECRET")), nil
+	})
+
+	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		// Cookie successfully validated, user account has access
+
+		// Check cookie expiration
+		if float64(time.Now().Unix()) > claims["exp"].(float64) {
+			// Abort if cookie expired (current time greater than cookie expiration)
+			c.AbortWithStatus(http.StatusUnauthorized)
+		}
+
+		// Find user account with token sub
+		var foundAccount user
+		if err := db.QueryRow("SELECT * FROM accounts WHERE email=?", claims["sub"]).Scan(&foundAccount.Account_id, &foundAccount.Email, &foundAccount.Password, &foundAccount.Account_Type); err != nil {
+			// account email not found
+			if err == sql.ErrNoRows {
+				c.AbortWithStatus(http.StatusUnauthorized)
+			}
+		}
+
+		// Attach user account to request
+		c.Set("user", foundAccount)
+
+		// Continue
+		c.Next()
+	} else {
+		// Cookie not successfully validated => abort
+		c.AbortWithStatus(http.StatusUnauthorized)
+	}
 }
 
 func getAccounts(c *gin.Context) {
