@@ -42,6 +42,10 @@ type userFirstLastNameEmail struct {
 	Last_name  string `json:"last_name"`
 }
 
+type email struct {
+	Email string `json:"email"`
+}
+
 func setupDBConnection() {
 	cfg := mysql.Config{
 		User:   "root",
@@ -77,8 +81,8 @@ func main() {
 	// router.PATCH("/update-account-password", updateAccountPassword)
 	// router.DELETE("/delete-account", deleteAccount) only Admin
 	// router.PATCH("/update-account-details", updateAccountDetails)
-	// router.GET("/accounts-details", getAccountsDetails)
 	router.POST("/new-account-details", postAccountDetails)
+	router.GET("/account-details", getAccountDetails)
 
 	// Routes related to orders
 	// router.GET("/orders", getOrders)
@@ -291,4 +295,36 @@ func postAccountDetails(c *gin.Context) {
 
 	// Respond
 	c.IndentedJSON(http.StatusOK, gin.H{"newAccountDetailCreated": reqBody.Email})
+}
+
+func getAccountDetails(c *gin.Context) {
+	var reqBody email
+	var accountDetails userDetails
+	var accountID int
+
+	// Return Error HTTP Bad Request 400 if unable to read from request body
+	if c.BindJSON(&reqBody) != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to read request body"})
+	}
+
+	// Find and Save Account ID from database using Account Email provided in request body
+	if err := db.QueryRow("SELECT account_id FROM accounts WHERE email=?", reqBody.Email).Scan(&accountID); err != nil {
+		// if response returns no rows means no account found in database
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"Error": "No Account Found"})
+			return
+		}
+	}
+
+	// Find and Save account details from DB
+	if err := db.QueryRow("SELECT * FROM accounts_details WHERE account_id=?", accountID).Scan(&accountDetails.Detail_id, &accountDetails.Account_id, &accountDetails.First_name, &accountDetails.Last_name); err != nil {
+		// if response returns no rows means no account details found in database
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"Error": "No Account Details Found"})
+			return
+		}
+	}
+
+	// Respond
+	c.IndentedJSON(http.StatusOK, accountDetails)
 }
