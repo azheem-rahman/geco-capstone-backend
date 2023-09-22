@@ -156,8 +156,7 @@ func login(c *gin.Context) {
 	// Get email and password from request body
 	var reqBody emailPassword
 	var accountFoundInDB user
-	// var emailFound bool
-	// var passwordMatched bool
+	var accountDetailsFoundInDB userDetails
 
 	// Returns Error HTTP Bad Request 400 if unable to read from request body
 	if c.BindJSON(&reqBody) != nil {
@@ -165,19 +164,40 @@ func login(c *gin.Context) {
 		return
 	}
 
-	// Look up email of login account in database
-	if err := db.QueryRow("SELECT * FROM accounts WHERE email=?", reqBody.Email).Scan(&accountFoundInDB.Account_id, &accountFoundInDB.Email, &accountFoundInDB.Password, &accountFoundInDB.Account_Type); err != nil {
-		// if response returns a no row means email does not exist in database => account does not exist
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusBadRequest, gin.H{"Error": "Invalid email or password"})
-			return
-		}
+	// Look up email of login account in accounts database and retrieve account id, email, password, account_type
+	rows, err := db.Query("SELECT * FROM accounts WHERE email=?", reqBody.Email)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to retrieve login credentials in database"})
+		return
+	}
+	if rows.Next() {
+		// Account found with email provided
+		rows.Scan(&accountFoundInDB.Account_id, &accountFoundInDB.Email, &accountFoundInDB.Password, &accountFoundInDB.Account_Type)
+	} else {
+		// No Account found with email provided
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Invalid email or password"})
+		return
+	}
+
+	// Look up email of login account in accounts_details database and retrieve first_name, last_name
+	rows, err = db.Query("SELECT * FROM accounts_details WHERE account_id=?", accountFoundInDB.Account_id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to retrieve account details in database"})
+		return
+	}
+	if rows.Next() {
+		// Account details found with email provided
+		rows.Scan(&accountDetailsFoundInDB.Detail_id, &accountDetailsFoundInDB.Account_id, &accountDetailsFoundInDB.First_name, &accountDetailsFoundInDB.Last_name)
+	} else {
+		// No Account details found with email provided
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "No account details found"})
+		return
 	}
 
 	// Compare password of login account with hashed password of account in database
-	err := bcrypt.CompareHashAndPassword([]byte(accountFoundInDB.Password), []byte(reqBody.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(accountFoundInDB.Password), []byte(reqBody.Password))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": "Invalid email or password"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Invalid email or password"})
 		return
 	}
 
@@ -191,7 +211,7 @@ func login(c *gin.Context) {
 	// Sign and get complete encoded JWT token as a string using secret key stored in .env file
 	tokenString, err := token.SignedString([]byte(os.Getenv("SECRET")))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to create token"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to create token"})
 		return
 	}
 
@@ -200,7 +220,7 @@ func login(c *gin.Context) {
 	c.SetCookie("Authorisation", tokenString, 3600*24, "", "", false, true)
 
 	// Return HTTP OK 200
-	c.JSON(http.StatusOK, gin.H{})
+	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "Login successful", "firstName": accountDetailsFoundInDB.First_name, "lastName": accountDetailsFoundInDB.Last_name, "accountType": accountFoundInDB.Account_Type})
 }
 
 func accountIsLoggedIn(c *gin.Context) {
@@ -335,33 +355,40 @@ func postAccountDetails(c *gin.Context) {
 
 	// Return Error HTTP Bad Request 400 if unable to read from request body
 	if c.BindJSON(&reqBody) != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to read request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to read request body"})
 	}
 
 	// Find and Save Account ID from database using Account Email provided in request body
-	if err := db.QueryRow("SELECT account_id FROM accounts WHERE email=?", reqBody.Email).Scan(&accountID); err != nil {
-		// if response returns no rows means no account found in database
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusBadRequest, gin.H{"Error": "No Account Found"})
-			return
-		}
-	}
-
-	// Create new account detail for new account
-	var newAccountDetail userDetails
-	newAccountDetail.Account_id = accountID
-	newAccountDetail.First_name = reqBody.First_name
-	newAccountDetail.Last_name = reqBody.Last_name
-
-	// Save new account detail to DB
-	_, err := db.Exec("INSERT INTO accounts_details (account_id, first_name, last_name) VALUES (?, ?, ?)", newAccountDetail.Account_id, newAccountDetail.First_name, newAccountDetail.Last_name)
+	rows, err := db.Query("SELECT account_id FROM accounts WHERE email=?", reqBody.Email)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to create account details"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to check if account exists in database"})
 		return
 	}
 
-	// Respond
-	c.IndentedJSON(http.StatusOK, gin.H{"newAccountDetailCreated": reqBody.Email})
+	if rows.Next() {
+		// AccountID found
+		rows.Scan(&accountID)
+
+		// Create new account detail for new account
+		var newAccountDetail userDetails
+		newAccountDetail.Account_id = accountID
+		newAccountDetail.First_name = reqBody.First_name
+		newAccountDetail.Last_name = reqBody.Last_name
+
+		// Save new account detail to DB
+		_, err = db.Exec("INSERT INTO accounts_details (account_id, first_name, last_name) VALUES (?, ?, ?)", newAccountDetail.Account_id, newAccountDetail.First_name, newAccountDetail.Last_name)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to create account details"})
+			return
+		}
+
+		// Respond
+		c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "newAccountDetailCreated": reqBody.Email})
+	} else {
+		// No AccountID found
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "No Account Found"})
+		return
+	}
 }
 
 func getAccountDetails(c *gin.Context) {
