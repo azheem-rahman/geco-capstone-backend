@@ -282,43 +282,78 @@ func getAccounts(c *gin.Context) {
 func postAccount(c *gin.Context) {
 	// Get email and password for new account from request body
 	var reqBody emailPassword
-	var emailFound bool
+	// var emailFound bool
 
 	// Returns Error HTTP Bad Request 400 if unable to read from request body
 	if c.BindJSON(&reqBody) != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to read request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to read request body"})
 		return
 	}
 
 	// Check if email already taken
-	row := db.QueryRow("SELECT * FROM accounts WHERE email=?", reqBody.Email).Scan(&emailFound)
-	// if response returns a row means email already exists in database
-	if row != sql.ErrNoRows {
+	rows, err := db.Query("SELECT * FROM accounts WHERE email=?", reqBody.Email)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to check if email taken in database"})
+		return
+	}
+
+	if rows.Next() {
+		// Email already taken in database
 		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Email taken"})
 		return
+	} else {
+		// Email available to use for new account
+
+		// Hash password
+		hash, err := bcrypt.GenerateFromPassword([]byte(reqBody.Password), 10)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to hash password"})
+			return
+		}
+
+		// Create the user
+		var newAccount emailPassword
+		newAccount.Email = reqBody.Email
+		newAccount.Password = string(hash)
+		newAccount.Account_Type = reqBody.Account_Type
+
+		_, err = db.Exec("INSERT INTO accounts (email, password, account_type) VALUES (?, ?, ?)", newAccount.Email, newAccount.Password, newAccount.Account_Type)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to create user"})
+			return
+		}
+
+		// Respond
+		c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "newAccountEmailCreated": newAccount.Email})
 	}
 
-	// Hash password
-	hash, err := bcrypt.GenerateFromPassword([]byte(reqBody.Password), 10)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to hash password"})
-		return
-	}
+	// if response returns a row means email already exists in database
+	// if err != sql.ErrNoRows {
+	// 	c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Email taken"})
+	// 	return
+	// }
 
-	// Create the user
-	var newAccount emailPassword
-	newAccount.Email = reqBody.Email
-	newAccount.Password = string(hash)
-	newAccount.Account_Type = reqBody.Account_Type
+	// // Hash password
+	// hash, err := bcrypt.GenerateFromPassword([]byte(reqBody.Password), 10)
+	// if err != nil {
+	// 	c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to hash password"})
+	// 	return
+	// }
 
-	_, err = db.Exec("INSERT INTO accounts (email, password, account_type) VALUES (?, ?, ?)", newAccount.Email, newAccount.Password, newAccount.Account_Type)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to create user"})
-		return
-	}
+	// // Create the user
+	// var newAccount emailPassword
+	// newAccount.Email = reqBody.Email
+	// newAccount.Password = string(hash)
+	// newAccount.Account_Type = reqBody.Account_Type
 
-	// Respond
-	c.IndentedJSON(http.StatusOK, gin.H{"newAccountEmailCreated": newAccount.Email})
+	// _, err = db.Exec("INSERT INTO accounts (email, password, account_type) VALUES (?, ?, ?)", newAccount.Email, newAccount.Password, newAccount.Account_Type)
+	// if err != nil {
+	// 	c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to create user"})
+	// 	return
+	// }
+
+	// // Respond
+	// c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "newAccountEmailCreated": newAccount.Email})
 }
 
 func postAccountDetails(c *gin.Context) {
