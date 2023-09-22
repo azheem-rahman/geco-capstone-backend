@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
 	"github.com/golang-jwt/jwt/v4"
@@ -127,6 +128,11 @@ func main() {
 	setupDBConnection()
 
 	router := gin.Default()
+
+	// To enable CORS Support
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	router.Use(cors.New(config))
 
 	// Routes related to user account login and creation
 	router.POST("/login", login)
@@ -280,23 +286,22 @@ func postAccount(c *gin.Context) {
 
 	// Returns Error HTTP Bad Request 400 if unable to read from request body
 	if c.BindJSON(&reqBody) != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to read request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to read request body"})
 		return
 	}
 
 	// Check if email already taken
-	if err := db.QueryRow("SELECT * FROM accounts WHERE email=?", reqBody.Email).Scan(&emailFound); err != nil {
-		// if response returns a row means email already exists in database
-		if err != sql.ErrNoRows {
-			c.JSON(http.StatusBadRequest, gin.H{"Error": "Email taken"})
-			return
-		}
+	row := db.QueryRow("SELECT * FROM accounts WHERE email=?", reqBody.Email).Scan(&emailFound)
+	// if response returns a row means email already exists in database
+	if row != sql.ErrNoRows {
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Email taken"})
+		return
 	}
 
 	// Hash password
 	hash, err := bcrypt.GenerateFromPassword([]byte(reqBody.Password), 10)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to hash password"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to hash password"})
 		return
 	}
 
@@ -308,7 +313,7 @@ func postAccount(c *gin.Context) {
 
 	_, err = db.Exec("INSERT INTO accounts (email, password, account_type) VALUES (?, ?, ?)", newAccount.Email, newAccount.Password, newAccount.Account_Type)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to create user"})
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Failed to create user"})
 		return
 	}
 
