@@ -326,34 +326,6 @@ func postAccount(c *gin.Context) {
 		// Respond
 		c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "newAccountEmailCreated": newAccount.Email})
 	}
-
-	// if response returns a row means email already exists in database
-	// if err != sql.ErrNoRows {
-	// 	c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Email taken"})
-	// 	return
-	// }
-
-	// // Hash password
-	// hash, err := bcrypt.GenerateFromPassword([]byte(reqBody.Password), 10)
-	// if err != nil {
-	// 	c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to hash password"})
-	// 	return
-	// }
-
-	// // Create the user
-	// var newAccount emailPassword
-	// newAccount.Email = reqBody.Email
-	// newAccount.Password = string(hash)
-	// newAccount.Account_Type = reqBody.Account_Type
-
-	// _, err = db.Exec("INSERT INTO accounts (email, password, account_type) VALUES (?, ?, ?)", newAccount.Email, newAccount.Password, newAccount.Account_Type)
-	// if err != nil {
-	// 	c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to create user"})
-	// 	return
-	// }
-
-	// // Respond
-	// c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "newAccountEmailCreated": newAccount.Email})
 }
 
 func postAccountDetails(c *gin.Context) {
