@@ -308,7 +308,7 @@ func getAccounts(c *gin.Context) {
 	rows, err := db.Query("SELECT * FROM accounts")
 	// if err from getting rows of accounts from DB, return HTTP Bad Request 400
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to retrieve accounts from DB"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to retrieve accounts from DB"})
 		return
 	}
 	defer rows.Close()
@@ -316,14 +316,14 @@ func getAccounts(c *gin.Context) {
 		var account user
 		// scan each row of accounts and save to account
 		if err := rows.Scan(&account.Account_id, &account.Email, &account.Password, &account.Account_Type); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to save accounts from DB"})
+			c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to save accounts from DB"})
 			return
 		}
 		// add account to accounts slice
 		accounts = append(accounts, account)
 	}
 
-	c.JSON(http.StatusOK, accounts)
+	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "successfully retrieved profiles from DB", "profiles": accounts})
 }
 
 func postAccount(c *gin.Context) {
