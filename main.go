@@ -102,6 +102,33 @@ type orderWithoutId struct {
 	Completed           int    `json:"completed"`
 }
 
+type newOrderFromFrontend struct {
+	Email               string `json:"email"`
+	OrderLength         int    `json:"order_length"`
+	OrderWidth          int    `json:"order_width"`
+	OrderHeight         int    `json:"order_height"`
+	OrderWeight         int    `json:"order_weight"`
+	ConsigneeName       string `json:"consignee_name"`
+	ConsigneeNumber     string `json:"consignee_number"`
+	ConsigneeCountry    string `json:"consignee_country"`
+	ConsigneeAddress    string `json:"consignee_address"`
+	ConsigneePostal     string `json:"consignee_postal"`
+	ConsigneeState      string `json:"consignee_state"`
+	ConsigneeCity       string `json:"consignee_city"`
+	ConsigneeProvince   string `json:"consignee_province"`
+	ConsigneeEmail      string `json:"consignee_email"`
+	PickupContactName   string `json:"pickup_contact_name"`
+	PickupContactNumber string `json:"pickup_contact_number"`
+	PickupCountry       string `json:"pickup_country"`
+	PickupAddress       string `json:"pickup_address"`
+	PickupPostal        string `json:"pickup_postal"`
+	PickupState         string `json:"pickup_state"`
+	PickupCity          string `json:"pickup_city"`
+	PickupProvince      string `json:"pickup_province"`
+	DueDate             string `json:"due_date"`
+	Completed           int    `json:"completed"`
+}
+
 func setupDBConnection() {
 	cfg := mysql.Config{
 		User:   "root",
@@ -425,48 +452,64 @@ func getAccountDetails(c *gin.Context) {
 
 func postOrder(c *gin.Context) {
 	// Get order details from request body
-	var reqBody orderWithoutId
+	var reqBody newOrderFromFrontend
+	var accountID int
 
 	// Returns Error HTTP Bad Request 400 if unable to read from request body
 	if c.BindJSON(&reqBody) != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to read request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to read request body"})
 	}
 
-	// Create the order in database
-	var newOrder orderWithoutId
-	newOrder.AccountId = reqBody.AccountId
-	newOrder.OrderLength = reqBody.OrderLength
-	newOrder.OrderWidth = reqBody.OrderWidth
-	newOrder.OrderHeight = reqBody.OrderHeight
-	newOrder.OrderWeight = reqBody.OrderWeight
-	newOrder.ConsigneeName = reqBody.ConsigneeName
-	newOrder.ConsigneeNumber = reqBody.ConsigneeNumber
-	newOrder.ConsigneeCountry = reqBody.ConsigneeCountry
-	newOrder.ConsigneeAddress = reqBody.ConsigneeAddress
-	newOrder.ConsigneePostal = reqBody.ConsigneePostal
-	newOrder.ConsigneeState = reqBody.ConsigneeState
-	newOrder.ConsigneeCity = reqBody.ConsigneeCity
-	newOrder.ConsigneeProvince = reqBody.ConsigneeProvince
-	newOrder.ConsigneeEmail = reqBody.ConsigneeEmail
-	newOrder.PickupContactName = reqBody.PickupContactName
-	newOrder.PickupContactNumber = reqBody.PickupContactNumber
-	newOrder.PickupCountry = reqBody.PickupCountry
-	newOrder.PickupAddress = reqBody.PickupAddress
-	newOrder.PickupPostal = reqBody.PickupPostal
-	newOrder.PickupState = reqBody.PickupState
-	newOrder.PickupCity = reqBody.PickupCity
-	newOrder.PickupProvince = reqBody.PickupProvince
-	newOrder.DueDate = reqBody.DueDate
-	newOrder.Completed = reqBody.Completed
-
-	_, err := db.Exec("INSERT INTO orders (account_id, order_length,order_width, order_height, order_weight, consignee_name, consignee_number, consignee_country, consignee_address, consignee_postal, consignee_state, consignee_city, consignee_province, consignee_email, pickup_contact_name, pickup_contact_number, pickup_country, pickup_address, pickup_postal, pickup_state, pickup_city, pickup_province, due_date, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", newOrder.AccountId, newOrder.OrderLength, newOrder.OrderWidth, newOrder.OrderHeight, newOrder.OrderWeight, newOrder.ConsigneeName, newOrder.ConsigneeNumber, newOrder.ConsigneeCountry, newOrder.ConsigneeAddress, newOrder.ConsigneePostal, newOrder.ConsigneeState, newOrder.ConsigneeCity, newOrder.ConsigneeProvince, newOrder.ConsigneeEmail, newOrder.PickupContactName, newOrder.PickupContactNumber, newOrder.PickupCountry, newOrder.PickupAddress, newOrder.PickupPostal, newOrder.PickupState, newOrder.PickupCity, newOrder.PickupProvince, newOrder.DueDate, newOrder.Completed)
+	// Find and Save Account ID from database using Account Email provided in request body
+	rows, err := db.Query("SELECT account_id FROM accounts WHERE email=?", reqBody.Email)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to create order"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to check if account exists in database"})
 		return
 	}
+	if rows.Next() {
+		// AccountID found
+		rows.Scan(&accountID)
 
-	// Respond
-	c.IndentedJSON(http.StatusOK, newOrder)
+		// Create the order in database
+		var newOrder orderWithoutId
+		newOrder.AccountId = accountID
+		newOrder.OrderLength = reqBody.OrderLength
+		newOrder.OrderWidth = reqBody.OrderWidth
+		newOrder.OrderHeight = reqBody.OrderHeight
+		newOrder.OrderWeight = reqBody.OrderWeight
+		newOrder.ConsigneeName = reqBody.ConsigneeName
+		newOrder.ConsigneeNumber = reqBody.ConsigneeNumber
+		newOrder.ConsigneeCountry = reqBody.ConsigneeCountry
+		newOrder.ConsigneeAddress = reqBody.ConsigneeAddress
+		newOrder.ConsigneePostal = reqBody.ConsigneePostal
+		newOrder.ConsigneeState = reqBody.ConsigneeState
+		newOrder.ConsigneeCity = reqBody.ConsigneeCity
+		newOrder.ConsigneeProvince = reqBody.ConsigneeProvince
+		newOrder.ConsigneeEmail = reqBody.ConsigneeEmail
+		newOrder.PickupContactName = reqBody.PickupContactName
+		newOrder.PickupContactNumber = reqBody.PickupContactNumber
+		newOrder.PickupCountry = reqBody.PickupCountry
+		newOrder.PickupAddress = reqBody.PickupAddress
+		newOrder.PickupPostal = reqBody.PickupPostal
+		newOrder.PickupState = reqBody.PickupState
+		newOrder.PickupCity = reqBody.PickupCity
+		newOrder.PickupProvince = reqBody.PickupProvince
+		newOrder.DueDate = reqBody.DueDate
+		newOrder.Completed = reqBody.Completed
+
+		_, err := db.Exec("INSERT INTO orders (account_id, order_length,order_width, order_height, order_weight, consignee_name, consignee_number, consignee_country, consignee_address, consignee_postal, consignee_state, consignee_city, consignee_province, consignee_email, pickup_contact_name, pickup_contact_number, pickup_country, pickup_address, pickup_postal, pickup_state, pickup_city, pickup_province, due_date, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", newOrder.AccountId, newOrder.OrderLength, newOrder.OrderWidth, newOrder.OrderHeight, newOrder.OrderWeight, newOrder.ConsigneeName, newOrder.ConsigneeNumber, newOrder.ConsigneeCountry, newOrder.ConsigneeAddress, newOrder.ConsigneePostal, newOrder.ConsigneeState, newOrder.ConsigneeCity, newOrder.ConsigneeProvince, newOrder.ConsigneeEmail, newOrder.PickupContactName, newOrder.PickupContactNumber, newOrder.PickupCountry, newOrder.PickupAddress, newOrder.PickupPostal, newOrder.PickupState, newOrder.PickupCity, newOrder.PickupProvince, newOrder.DueDate, newOrder.Completed)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to create order"})
+			return
+		}
+
+		// Respond
+		c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "New Order Successfully Created", "newOrderCreated": newOrder})
+	} else {
+		// No AccountID found
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "No Account Found", "accountID": accountID, "email": reqBody.Email})
+		return
+	}
 }
 
 func getOrders(c *gin.Context) {
@@ -476,7 +519,7 @@ func getOrders(c *gin.Context) {
 	rows, err := db.Query("SELECT * FROM orders")
 	// if err from getting rows of orders from DB, return HTTP Bad Request 400
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to retrieve orders from DB"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to retrieve orders from DB"})
 		return
 	}
 	defer rows.Close()
@@ -509,12 +552,12 @@ func getOrders(c *gin.Context) {
 			&currentOrder.PickupProvince,
 			&currentOrder.DueDate,
 			&currentOrder.Completed); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"Error": "Failed to save orders from DB"})
+			c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to save orders from DB"})
 			return
 		}
 		// add currentOrder to orders slice
 		orders = append(orders, currentOrder)
 	}
 
-	c.JSON(http.StatusOK, orders)
+	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "successfully retrieved orders from DB", "orders": orders})
 }
