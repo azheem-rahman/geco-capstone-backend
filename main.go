@@ -47,6 +47,16 @@ type email struct {
 	Email string `json:"email"`
 }
 
+type orderIdAccountId struct {
+	OrderId   int `json:"order_id"`
+	AccountId int `json:"account_id"`
+}
+
+type orderIdCompleted struct {
+	OrderId   int `json:"order_id"`
+	Completed int `json:"completed"`
+}
+
 type order struct {
 	OrderId             int    `json:"order_id"`
 	AccountId           int    `json:"account_id"`
@@ -103,7 +113,7 @@ type orderWithoutId struct {
 }
 
 type newOrderFromFrontend struct {
-	Email               string `json:"email"`
+	AccountId           int    `json:"account_id"`
 	OrderLength         int    `json:"order_length"`
 	OrderWidth          int    `json:"order_width"`
 	OrderHeight         int    `json:"order_height"`
@@ -175,6 +185,8 @@ func main() {
 	// Routes related to orders
 	router.GET("/orders", getOrders)
 	router.POST("/new-order", postOrder)
+	router.PATCH("/update-order-status", updateOrderStatus)
+	router.PATCH("/assign-order", assignOrder)
 
 	router.Run("localhost:8080")
 }
@@ -453,63 +465,48 @@ func getAccountDetails(c *gin.Context) {
 func postOrder(c *gin.Context) {
 	// Get order details from request body
 	var reqBody newOrderFromFrontend
-	var accountID int
 
 	// Returns Error HTTP Bad Request 400 if unable to read from request body
-	if c.BindJSON(&reqBody) != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to read request body"})
+	if c.ShouldBindJSON(&reqBody) != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to read request body", "reqBody": reqBody})
+		return
 	}
 
-	// Find and Save Account ID from database using Account Email provided in request body
-	rows, err := db.Query("SELECT account_id FROM accounts WHERE email=?", reqBody.Email)
+	// Create the order in database
+	var newOrder orderWithoutId
+	newOrder.AccountId = reqBody.AccountId
+	newOrder.OrderLength = reqBody.OrderLength
+	newOrder.OrderWidth = reqBody.OrderWidth
+	newOrder.OrderHeight = reqBody.OrderHeight
+	newOrder.OrderWeight = reqBody.OrderWeight
+	newOrder.ConsigneeName = reqBody.ConsigneeName
+	newOrder.ConsigneeNumber = reqBody.ConsigneeNumber
+	newOrder.ConsigneeCountry = reqBody.ConsigneeCountry
+	newOrder.ConsigneeAddress = reqBody.ConsigneeAddress
+	newOrder.ConsigneePostal = reqBody.ConsigneePostal
+	newOrder.ConsigneeState = reqBody.ConsigneeState
+	newOrder.ConsigneeCity = reqBody.ConsigneeCity
+	newOrder.ConsigneeProvince = reqBody.ConsigneeProvince
+	newOrder.ConsigneeEmail = reqBody.ConsigneeEmail
+	newOrder.PickupContactName = reqBody.PickupContactName
+	newOrder.PickupContactNumber = reqBody.PickupContactNumber
+	newOrder.PickupCountry = reqBody.PickupCountry
+	newOrder.PickupAddress = reqBody.PickupAddress
+	newOrder.PickupPostal = reqBody.PickupPostal
+	newOrder.PickupState = reqBody.PickupState
+	newOrder.PickupCity = reqBody.PickupCity
+	newOrder.PickupProvince = reqBody.PickupProvince
+	newOrder.DueDate = reqBody.DueDate
+	newOrder.Completed = reqBody.Completed
+
+	_, err := db.Exec("INSERT INTO orders (account_id, order_length, order_width, order_height, order_weight, consignee_name, consignee_number, consignee_country, consignee_address, consignee_postal, consignee_state, consignee_city, consignee_province, consignee_email, pickup_contact_name, pickup_contact_number, pickup_country, pickup_address, pickup_postal, pickup_state, pickup_city, pickup_province, due_date, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", newOrder.AccountId, newOrder.OrderLength, newOrder.OrderWidth, newOrder.OrderHeight, newOrder.OrderWeight, newOrder.ConsigneeName, newOrder.ConsigneeNumber, newOrder.ConsigneeCountry, newOrder.ConsigneeAddress, newOrder.ConsigneePostal, newOrder.ConsigneeState, newOrder.ConsigneeCity, newOrder.ConsigneeProvince, newOrder.ConsigneeEmail, newOrder.PickupContactName, newOrder.PickupContactNumber, newOrder.PickupCountry, newOrder.PickupAddress, newOrder.PickupPostal, newOrder.PickupState, newOrder.PickupCity, newOrder.PickupProvince, newOrder.DueDate, newOrder.Completed)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to check if account exists in database"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to create order"})
 		return
 	}
-	if rows.Next() {
-		// AccountID found
-		rows.Scan(&accountID)
 
-		// Create the order in database
-		var newOrder orderWithoutId
-		newOrder.AccountId = accountID
-		newOrder.OrderLength = reqBody.OrderLength
-		newOrder.OrderWidth = reqBody.OrderWidth
-		newOrder.OrderHeight = reqBody.OrderHeight
-		newOrder.OrderWeight = reqBody.OrderWeight
-		newOrder.ConsigneeName = reqBody.ConsigneeName
-		newOrder.ConsigneeNumber = reqBody.ConsigneeNumber
-		newOrder.ConsigneeCountry = reqBody.ConsigneeCountry
-		newOrder.ConsigneeAddress = reqBody.ConsigneeAddress
-		newOrder.ConsigneePostal = reqBody.ConsigneePostal
-		newOrder.ConsigneeState = reqBody.ConsigneeState
-		newOrder.ConsigneeCity = reqBody.ConsigneeCity
-		newOrder.ConsigneeProvince = reqBody.ConsigneeProvince
-		newOrder.ConsigneeEmail = reqBody.ConsigneeEmail
-		newOrder.PickupContactName = reqBody.PickupContactName
-		newOrder.PickupContactNumber = reqBody.PickupContactNumber
-		newOrder.PickupCountry = reqBody.PickupCountry
-		newOrder.PickupAddress = reqBody.PickupAddress
-		newOrder.PickupPostal = reqBody.PickupPostal
-		newOrder.PickupState = reqBody.PickupState
-		newOrder.PickupCity = reqBody.PickupCity
-		newOrder.PickupProvince = reqBody.PickupProvince
-		newOrder.DueDate = reqBody.DueDate
-		newOrder.Completed = reqBody.Completed
-
-		_, err := db.Exec("INSERT INTO orders (account_id, order_length,order_width, order_height, order_weight, consignee_name, consignee_number, consignee_country, consignee_address, consignee_postal, consignee_state, consignee_city, consignee_province, consignee_email, pickup_contact_name, pickup_contact_number, pickup_country, pickup_address, pickup_postal, pickup_state, pickup_city, pickup_province, due_date, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", newOrder.AccountId, newOrder.OrderLength, newOrder.OrderWidth, newOrder.OrderHeight, newOrder.OrderWeight, newOrder.ConsigneeName, newOrder.ConsigneeNumber, newOrder.ConsigneeCountry, newOrder.ConsigneeAddress, newOrder.ConsigneePostal, newOrder.ConsigneeState, newOrder.ConsigneeCity, newOrder.ConsigneeProvince, newOrder.ConsigneeEmail, newOrder.PickupContactName, newOrder.PickupContactNumber, newOrder.PickupCountry, newOrder.PickupAddress, newOrder.PickupPostal, newOrder.PickupState, newOrder.PickupCity, newOrder.PickupProvince, newOrder.DueDate, newOrder.Completed)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to create order"})
-			return
-		}
-
-		// Respond
-		c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "New Order Successfully Created", "newOrderCreated": newOrder})
-	} else {
-		// No AccountID found
-		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "No Account Found", "accountID": accountID, "email": reqBody.Email})
-		return
-	}
+	// Respond
+	c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "New Order Successfully Created", "newOrderCreated": newOrder})
 }
 
 func getOrders(c *gin.Context) {
@@ -560,4 +557,46 @@ func getOrders(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "successfully retrieved orders from DB", "orders": orders})
+}
+
+func updateOrderStatus(c *gin.Context) {
+	var reqBody orderIdCompleted
+
+	// Returns Error HTTP Bad Request 400 if unable to read from request body
+	if c.BindJSON(&reqBody) != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to read request body"})
+		return
+	}
+
+	// Find order based on Order ID and update status
+	rows, err := db.Query("UPDATE orders SET completed=? WHERE order_id=?", reqBody.Completed, reqBody.OrderId)
+	// if err in updating order, return HTTP Bad Request 400
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to update orders in database"})
+		return
+	} else if rows != nil {
+		// Respond
+		c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "Order Updated Successfully", "orderUpdated": reqBody.OrderId})
+	}
+}
+
+func assignOrder(c *gin.Context) {
+	var reqBody orderIdAccountId
+
+	// Returns Error HTTP Bad Request 400 if unable to read from request body
+	if c.BindJSON(&reqBody) != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to read request body"})
+		return
+	}
+
+	// Find order based on Order ID and update status
+	rows, err := db.Query("UPDATE orders SET account_id = ? WHERE order_id = ?", reqBody.AccountId, reqBody.OrderId)
+	// if err in updating order, return HTTP Bad Request 400
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to update orders in database"})
+		return
+	} else if rows != nil {
+		// Respond
+		c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "Order Updated Successfully", "orderUpdated": reqBody.OrderId})
+	}
 }
