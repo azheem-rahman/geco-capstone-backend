@@ -53,8 +53,8 @@ CREATE TABLE orders (
         REFERENCES accounts(account_id)
 );
 
-CREATE TABLE order_items (
-    item_id INT NOT NULL AUTO_INCREMENT,
+CREATE TABLE items (
+	item_id INT NOT NULL AUTO_INCREMENT,
     order_id INT,
     item_description text NOT NULL,
     item_category varchar(255) NOT NULL,
@@ -63,10 +63,12 @@ CREATE TABLE order_items (
     item_quantity INT NOT NULL,
     item_price_value decimal(10,2) NOT NULL,
     item_price_currency varchar(5) NOT NULL,
-    PRIMARY KEY (item_id),
-    CONSTRAINT fk_order_item
-        FOREIGN KEY (order_id)
-        REFERENCES orders(order_id)
-        ON DELETE CASCADE
-        ON UPDATE CASCADE
+    PRIMARY KEY(item_id)
+);
+
+CREATE TABLE order_items (
+	order_id int,
+    item_id int,
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    FOREIGN KEY (item_id) REFERENCES items(item_id)
 );
