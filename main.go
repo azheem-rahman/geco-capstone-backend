@@ -16,6 +16,39 @@ import (
 )
 
 var db *sql.DB
+var salesChannelDB *sql.DB
+
+//=============================//
+// Struct for Sales Channel DB //
+
+type ordersFromSales struct {
+	DueDate             string `json:"due_date"`
+	Completed           int    `json:"completed"`
+	OrderLength         int    `json:"order_length"`
+	OrderWidth          int    `json:"order_width"`
+	OrderHeight         int    `json:"order_height"`
+	OrderWeight         int    `json:"order_weight"`
+	ConsigneeName       string `json:"consignee_name"`
+	ConsigneeNumber     string `json:"consignee_number"`
+	ConsigneeCountry    string `json:"consignee_country"`
+	ConsigneeAddress    string `json:"consignee_address"`
+	ConsigneePostal     string `json:"consignee_postal"`
+	ConsigneeState      string `json:"consignee_state"`
+	ConsigneeCity       string `json:"consignee_city"`
+	ConsigneeProvince   string `json:"consignee_province"`
+	ConsigneeEmail      string `json:"consignee_email"`
+	PickupContactName   string `json:"pickup_contact_name"`
+	PickupContactNumber string `json:"pickup_contact_number"`
+	PickupCountry       string `json:"pickup_country"`
+	PickupAddress       string `json:"pickup_address"`
+	PickupPostal        string `json:"pickup_postal"`
+	PickupState         string `json:"pickup_state"`
+	PickupCity          string `json:"pickup_city"`
+	PickupProvince      string `json:"pickup_province"`
+}
+
+// end Struct for Sales Channel DB //
+//=================================//
 
 type user struct {
 	Account_id   int    `json:"account_id"`
@@ -58,8 +91,9 @@ type orderIdCompleted struct {
 }
 
 type order struct {
-	OrderId             int    `json:"order_id"`
-	AccountId           int    `json:"account_id"`
+	OrderId   int           `json:"order_id"`
+	AccountId sql.NullInt64 `json:"account_id,omitempty"`
+	// AccountId           int    `json:"account_id"`
 	OrderLength         int    `json:"order_length"`
 	OrderWidth          int    `json:"order_width"`
 	OrderHeight         int    `json:"order_height"`
@@ -139,6 +173,28 @@ type newOrderFromFrontend struct {
 	Completed           int    `json:"completed"`
 }
 
+func setupSalesChannelDBConnection() {
+	cfg := mysql.Config{
+		User:   "root",
+		Passwd: "Password",
+		Net:    "tcp",
+		Addr:   "127.0.0.1:3306",
+		DBName: "capstonesaleschanneldb",
+	}
+
+	var err error
+	salesChannelDB, err = sql.Open("mysql", cfg.FormatDSN())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	pingErr := salesChannelDB.Ping()
+	if pingErr != nil {
+		log.Fatal(pingErr)
+	}
+	fmt.Println("Connected to Sales Channel DB!")
+}
+
 func setupDBConnection() {
 	cfg := mysql.Config{
 		User:   "root",
@@ -162,6 +218,7 @@ func setupDBConnection() {
 }
 
 func main() {
+	setupSalesChannelDBConnection()
 	setupDBConnection()
 
 	router := gin.Default()
@@ -169,7 +226,11 @@ func main() {
 	// To enable CORS Support
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true
+	config.AllowCredentials = true
 	router.Use(cors.New(config))
+
+	// Route to pull orders from sales channel DB
+	router.GET("/pull-orders-from-sales-channel", getOrdersFromSales)
 
 	// Routes related to user account login and creation
 	router.POST("/login", login)
@@ -189,6 +250,66 @@ func main() {
 	router.PATCH("/assign-order", assignOrder)
 
 	router.Run("localhost:8080")
+}
+
+func getOrdersFromSales(c *gin.Context) {
+	var orders []ordersFromSales
+
+	// Get rows of orders with all details from capstone
+	rows, err := salesChannelDB.Query("SELECT due_date, completed, order_length,order_width,order_height,order_weight,consignee_name,consignee_number,consignee_country,consignee_address,consignee_postal,consignee_state,consignee_city,consignee_province,consignee_email,pickup_contact_name,pickup_contact_number,pickup_country,pickup_address,pickup_postal,pickup_state,pickup_city,pickup_province FROM orders JOIN order_details ON order_details.order_id = orders.order_id JOIN consignee_details ON consignee_details.order_id = orders.order_id JOIN pickup_details ON pickup_details.order_id = orders.order_id")
+	// if err from getting rows of orders from DB, return HTTP Bad Request 400
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to retrieve orders from DB"})
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var currentOrder ordersFromSales
+		// scan each row of order and save to currentOrder
+		if err := rows.Scan(
+			&currentOrder.DueDate,
+			&currentOrder.Completed,
+			&currentOrder.OrderLength,
+			&currentOrder.OrderWidth,
+			&currentOrder.OrderHeight,
+			&currentOrder.OrderWeight,
+			&currentOrder.ConsigneeName,
+			&currentOrder.ConsigneeNumber,
+			&currentOrder.ConsigneeCountry,
+			&currentOrder.ConsigneeAddress,
+			&currentOrder.ConsigneePostal,
+			&currentOrder.ConsigneeState,
+			&currentOrder.ConsigneeCity,
+			&currentOrder.ConsigneeProvince,
+			&currentOrder.ConsigneeEmail,
+			&currentOrder.PickupContactName,
+			&currentOrder.PickupContactNumber,
+			&currentOrder.PickupCountry,
+			&currentOrder.PickupAddress,
+			&currentOrder.PickupPostal,
+			&currentOrder.PickupState,
+			&currentOrder.PickupCity,
+			&currentOrder.PickupProvince); err != nil {
+			fmt.Println(err.Error())
+			c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to save orders from DB"})
+			return
+		}
+		// add currentOrder to orders slice
+		orders = append(orders, currentOrder)
+	}
+
+	// INSERT each order from orders slice into capstonedb (client's db)
+	for _, value := range orders {
+		_, err := db.Exec("INSERT INTO orders (order_length, order_width, order_height, order_weight, consignee_name, consignee_number, consignee_country, consignee_address, consignee_postal, consignee_state, consignee_city, consignee_province, consignee_email, pickup_contact_name, pickup_contact_number, pickup_country, pickup_address, pickup_postal, pickup_state, pickup_city, pickup_province, due_date, completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", value.OrderLength, value.OrderWidth, value.OrderHeight, value.OrderWeight, value.ConsigneeName, value.ConsigneeNumber, value.ConsigneeCountry, value.ConsigneeAddress, value.ConsigneePostal, value.ConsigneeState, value.ConsigneeCity, value.ConsigneeProvince, value.ConsigneeEmail, value.PickupContactName, value.PickupContactNumber, value.PickupCountry, value.PickupAddress, value.PickupPostal, value.PickupState, value.PickupCity, value.PickupProvince, value.DueDate, value.Completed)
+		if err != nil {
+			fmt.Println(err.Error())
+			c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to create order in DB"})
+			return
+		}
+	}
+
+	// Respond
+	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "successfully pulled orders from sales channel", "orders": orders})
 }
 
 func login(c *gin.Context) {
@@ -259,7 +380,7 @@ func login(c *gin.Context) {
 	c.SetCookie("Authorisation", tokenString, 3600*24, "", "", false, true)
 
 	// Return HTTP OK 200
-	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "Login successful", "firstName": accountDetailsFoundInDB.First_name, "lastName": accountDetailsFoundInDB.Last_name, "accountType": accountFoundInDB.Account_Type})
+	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "Login successful", "firstName": accountDetailsFoundInDB.First_name, "lastName": accountDetailsFoundInDB.Last_name, "accountType": accountFoundInDB.Account_Type, "accessToken": tokenString})
 }
 
 func accountIsLoggedIn(c *gin.Context) {
@@ -549,6 +670,7 @@ func getOrders(c *gin.Context) {
 			&currentOrder.PickupProvince,
 			&currentOrder.DueDate,
 			&currentOrder.Completed); err != nil {
+			fmt.Println(err.Error())
 			c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to save orders from DB"})
 			return
 		}
@@ -590,13 +712,13 @@ func assignOrder(c *gin.Context) {
 	}
 
 	// Find order based on Order ID and update status
-	rows, err := db.Query("UPDATE orders SET account_id = ? WHERE order_id = ?", reqBody.AccountId, reqBody.OrderId)
+	rows, err := db.Query("UPDATE orders SET account_id=? WHERE order_id=?", reqBody.AccountId, reqBody.OrderId)
 	// if err in updating order, return HTTP Bad Request 400
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to update orders in database"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": http.StatusBadRequest, "message": "Failed to assign orders in database"})
 		return
 	} else if rows != nil {
 		// Respond
-		c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "Order Updated Successfully", "orderUpdated": reqBody.OrderId})
+		c.IndentedJSON(http.StatusOK, gin.H{"status": http.StatusOK, "message": "Order Assigned Successfully", "orderUpdated": reqBody.OrderId})
 	}
 }
